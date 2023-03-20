@@ -57,6 +57,12 @@ def similarity(v1, v2):
     return np.dot(v1, v2)/(norm(v1)*norm(v2))  # return cosine similarity
 
 def fetch_memories(vector, logs, count):
+    def is_message_in_prev_list(scores, message):
+        for score in scores:
+            if score['prev'] == message:
+                return True
+        return False
+
     scores = list()
     prev = None
 
@@ -67,7 +73,10 @@ def fetch_memories(vector, logs, count):
         score = similarity(i['vector'], vector)
         i['score'] = score
         i['prev'] = prev
-        scores.append(i)
+
+        if not is_message_in_prev_list(scores, i):
+            scores.append(i)
+
         prev = i
     ordered = sorted(scores, key=lambda d: d['score'], reverse=True)
     # TODO - pick more memories temporally nearby the top most relevant memories
@@ -188,27 +197,30 @@ if __name__ == '__main__':
     while True:
         #### get user input, save it, vectorize it, etc
         userInput = input('\n\nUSER: ')
-        timestamp = time()
-        vector = gpt3_embedding(userInput)
-        timestring = timestamp_to_datetime(timestamp)
-      
-        # Save User's Message to Nexus
-        info = {'speaker': 'USER', 'time': timestamp, 'vector': vector, 'message': userInput, 'uuid': str(uuid4()), 'timestring': timestring}
-        filename = 'log_%s_USER.json' % timestamp
-        save_json('nexus/%s' % filename, info)
-        
-        #### load conversation
-        conversation = load_convo()
-        #### compose corpus (fetch memories, etc)
-        memories = fetch_memories(vector, conversation, 7)  # pull episodic memories
 
         block = ''
-        for mem in memories:
-            prev = mem['prev']
-            if prev != None:
-                block += prev['speaker'] + ': ' + prev['message'] + '\n\n'
 
-            block += mem['speaker'] + ': ' + mem['message'] + '\n\n----\n\n'
+        if len(userInput.strip()) > 0:
+            timestamp = time()
+            vector = gpt3_embedding(userInput)
+            timestring = timestamp_to_datetime(timestamp)
+
+            # Save User's Message to Nexus
+            info = {'speaker': 'USER', 'time': timestamp, 'vector': vector, 'message': userInput, 'uuid': str(uuid4()), 'timestring': timestring}
+            filename = 'log_%s_USER.json' % timestamp
+            save_json('nexus/%s' % filename, info)
+        
+            #### load conversation
+            conversation = load_convo()
+            #### compose corpus (fetch memories, etc)
+            memories = fetch_memories(vector, conversation, 7)  # pull episodic memories
+
+            for mem in memories:
+                prev = mem['prev']
+                if prev != None:
+                    block += prev['speaker'] + ': ' + prev['message'] + '\n\n'
+
+                block += mem['speaker'] + ': ' + mem['message'] + '\n\n----\n\n'
 
 
         # TODO - fetch declarative memories (facts, wikis, KB, company data, internet, etc)
